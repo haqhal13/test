@@ -5,8 +5,9 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 import requests
 
-# Bot Token
+# Bot Token and Webhook URL
 BOT_TOKEN = os.environ.get('BOT_TOKEN', '7739378344:AAHePCaShSC60pN1VwX9AY4TqD-xZMxQ1gY')
+WEBHOOK_URL = "https://test-1-ufqj.onrender.com/webhook"  # Replace with your Render app link
 
 # Flask app for webhook and health checks
 app = Flask(__name__)
@@ -14,9 +15,17 @@ app = Flask(__name__)
 # Telegram webhook route
 @app.route('/webhook', methods=['POST'])
 def webhook_handler():
-    # Pass the incoming request data to the Telegram bot
-    application.update_queue.put(Update.de_json(request.json, application.bot))
-    return "OK", 200
+    try:
+        # Log incoming request
+        print("Incoming webhook payload:", request.json)
+
+        # Process the Telegram update
+        application.update_queue.put(Update.de_json(request.json, application.bot))
+        return "OK", 200
+    except Exception as e:
+        # Log the error
+        print("Error in webhook handler:", str(e))
+        return "Internal Server Error", 500
 
 # Health check route
 @app.route('/health', methods=['GET'])
@@ -118,7 +127,6 @@ def main():
     application.add_handler(CallbackQueryHandler(go_back, pattern="^go_back$"))
 
     # Set up the webhook
-    WEBHOOK_URL = f"https://bot-1-f2wh.onrender.com/webhook"  # Replace with your actual Render app name
     response = requests.post(
         f"https://api.telegram.org/bot{BOT_TOKEN}/setWebhook",
         json={"url": WEBHOOK_URL},
