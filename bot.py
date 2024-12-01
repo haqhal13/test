@@ -3,11 +3,12 @@ from flask import Flask
 from threading import Thread
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, WebAppInfo
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
+import requests
 
-# Bot Token (Replace with your actual bot token for local testing, but use environment variable for security in Render)
+# Bot Token (replace with your actual token)
 BOT_TOKEN = os.environ.get('BOT_TOKEN', '7739378344:AAHePCaShSC60pN1VwX9AY4TqD-xZMxQ1gY')
 
-# Flask app for health checks
+# Flask app for health check
 app = Flask(__name__)
 
 @app.route('/health', methods=['GET'])
@@ -122,6 +123,14 @@ def main():
     application.add_handler(CallbackQueryHandler(payment_handler, pattern="^(paypal|apple_google_pay|crypto|i_paid)$"))
     application.add_handler(CallbackQueryHandler(go_back, pattern="^go_back$"))
 
+    # Set webhook URL
+    WEBHOOK_URL = f"https://<your-app-name>.onrender.com/{BOT_TOKEN}"  # Replace <your-app-name> with your Render app name
+    response = requests.post(
+        f"https://api.telegram.org/bot{BOT_TOKEN}/setWebhook",
+        json={"url": WEBHOOK_URL},
+    )
+    print("Webhook set:", response.status_code, response.text)
+
     # Flask thread for health checks
     thread = Thread(target=lambda: app.run(host="0.0.0.0", port=5000))
     thread.start()
@@ -132,7 +141,7 @@ def main():
         listen="0.0.0.0",
         port=port,
         url_path=BOT_TOKEN,
-        webhook_url=f"https://<your-app-name>.onrender.com/{BOT_TOKEN}"
+        webhook_url=WEBHOOK_URL,
     )
 
 if __name__ == "__main__":
