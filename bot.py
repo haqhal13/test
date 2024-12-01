@@ -12,6 +12,9 @@ WEBHOOK_URL = "https://test-1-ufqj.onrender.com/webhook"  # Replace with your Re
 # Flask app for webhook and health checks
 app = Flask(__name__)
 
+# Initialize Telegram application globally
+application = Application.builder().token(BOT_TOKEN).build()
+
 # Telegram webhook route
 @app.route('/webhook', methods=['POST'])
 def webhook_handler():
@@ -117,10 +120,6 @@ async def go_back(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 # Main function
 def main():
-    global application
-    # Initialize Telegram application
-    application = Application.builder().token(BOT_TOKEN).build()
-
     # Add command and callback query handlers
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CallbackQueryHandler(payment_handler, pattern="^(paypal|apple_google_pay|crypto)$"))
