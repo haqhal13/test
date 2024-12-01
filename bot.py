@@ -20,8 +20,7 @@ BOT_TOKEN = "7739378344:AAHePCaShSC60pN1VwX9AY4TqD-xZMxQ1gY"
 WEBHOOK_URL = "https://test-1-ufqj.onrender.com/webhook"
 
 # Initialize Telegram Application
-application = Application.builder().token(BOT_TOKEN).build()
-
+application = None
 
 # Command Handler for `/start`
 async def start(update: Update, context):
@@ -32,28 +31,26 @@ async def start(update: Update, context):
     except Exception as e:
         logger.error(f"Error in start handler: {traceback.format_exc()}")
 
-
-# Add Handlers to the Bot
-application.add_handler(CommandHandler("start", start))
-
-
-@app.before_request
-def ensure_bot_initialized():
-    """Ensure the bot is initialized before processing any requests."""
-    if not application.is_running:
+# Initialize the bot application once before any request
+@app.before_first_request
+def initialize_bot():
+    """Initialize the bot application."""
+    global application
+    if application is None:
         try:
+            application = Application.builder().token(BOT_TOKEN).build()
+            application.add_handler(CommandHandler("start", start))
             asyncio.run(application.initialize())
-            logger.info("Telegram Application initialized successfully.")
+            logger.info("Telegram bot initialized successfully.")
         except Exception as e:
-            logger.critical("Failed to initialize Telegram Application!")
+            logger.critical("Failed to initialize Telegram bot!")
             logger.critical(f"Error Details: {traceback.format_exc()}")
 
-
+# Webhook endpoint for Telegram
 @app.route("/webhook", methods=["POST"])
 async def webhook():
     """Handle incoming updates from Telegram."""
     try:
-        # Parse the incoming update payload
         update_payload = request.get_json(force=True)
         logger.info(f"Webhook received update: {update_payload}")
 
@@ -67,17 +64,12 @@ async def webhook():
         logger.error(f"Error Details: {traceback.format_exc()}")
         return jsonify({"error": str(e)}), 500
 
-
+# Set Webhook
 @app.route("/set_webhook", methods=["GET"])
 def set_webhook():
     """Set the Telegram bot webhook."""
     try:
-        application.run_webhook(
-            listen="0.0.0.0",
-            port=5000,
-            url_path="webhook",
-            webhook_url=WEBHOOK_URL,
-        )
+        asyncio.run(application.bot.set_webhook(WEBHOOK_URL))
         logger.info("Webhook set successfully.")
         return jsonify({"status": "webhook set"}), 200
     except Exception as e:
@@ -85,13 +77,12 @@ def set_webhook():
         logger.error(f"Error Details: {traceback.format_exc()}")
         return jsonify({"error": str(e)}), 500
 
-
+# Health Check
 @app.route("/health", methods=["GET"])
 def health():
     """Health check endpoint."""
     logger.info("Health check requested.")
     return jsonify({"status": "healthy"}), 200
-
 
 if __name__ == "__main__":
     try:
