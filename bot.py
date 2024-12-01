@@ -21,6 +21,9 @@ WEBHOOK_URL = "https://test-1-ufqj.onrender.com/webhook"
 # Initialize Telegram Bot application
 application = Application.builder().token(BOT_TOKEN).build()
 
+# Ensure application is initialized
+application.initialize()
+
 # Command Handler for `/start`
 async def start(update: Update, context):
     """Handle the /start command."""
