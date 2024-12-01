@@ -1,13 +1,11 @@
 import os
-import asyncio
 from flask import Flask, request
-from threading import Thread
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
-import requests
+import asyncio
 
 # Bot Token and Webhook URL
-BOT_TOKEN = os.environ.get('BOT_TOKEN', '7739378344:AAHePCaShSC60pN1VwX9AY4TqD-xZMxQ1gY')
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "7739378344:AAHePCaShSC60pN1VwX9AY4TqD-xZMxQ1gY")
 WEBHOOK_URL = "https://test-1-ufqj.onrender.com/webhook"  # Replace with your Render app link
 
 # Flask app for webhook and health checks
@@ -16,30 +14,25 @@ app = Flask(__name__)
 # Initialize Telegram application globally
 application = Application.builder().token(BOT_TOKEN).build()
 
-# Telegram webhook route
-@app.route('/webhook', methods=['POST'])
-def webhook_handler():
+# Flask route to handle webhooks
+@app.route("/webhook", methods=["POST"])
+async def webhook_handler():
     try:
-        # Log incoming request
-        print("Incoming webhook payload:", request.json)
-
-        # Asynchronously add update to the queue
-        asyncio.run(application.update_queue.put(Update.de_json(request.json, application.bot)))
+        data = request.json
+        print("Incoming webhook payload:", data)
+        update = Update.de_json(data, application.bot)
+        await application.process_update(update)
         return "OK", 200
     except Exception as e:
-        # Log the error
         print("Error in webhook handler:", str(e))
         return "Internal Server Error", 500
 
+
 # Health check route
-@app.route('/health', methods=['GET'])
+@app.route("/health", methods=["GET"])
 def health_check():
     return "Bot is running!", 200
 
-# Default route (optional)
-@app.route('/', methods=['GET'])
-def home():
-    return "Welcome to the Telegram Bot Service!", 200
 
 # Start command handler
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -56,6 +49,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text(intro_text, reply_markup=reply_markup)
+
 
 # Payment method handler
 async def payment_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -102,6 +96,7 @@ async def payment_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             ])
         )
 
+
 # Go back handler
 async def go_back(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     intro_text = (
@@ -119,31 +114,24 @@ async def go_back(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     await query.edit_message_text(intro_text, reply_markup=reply_markup)
 
-# Main function
+
+# Main function to set up handlers and start the Flask app
 def main():
-    # Add command and callback query handlers
+    # Add command and callback handlers
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CallbackQueryHandler(payment_handler, pattern="^(paypal|apple_google_pay|crypto)$"))
     application.add_handler(CallbackQueryHandler(go_back, pattern="^go_back$"))
 
-    # Set up the webhook
+    # Set the webhook
     response = requests.post(
         f"https://api.telegram.org/bot{BOT_TOKEN}/setWebhook",
         json={"url": WEBHOOK_URL},
     )
     print("Webhook set:", response.status_code, response.text)
 
-    # Start Flask in a separate thread
-    flask_thread = Thread(target=lambda: app.run(host="0.0.0.0", port=5000))
-    flask_thread.start()
+    # Run the Flask app
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
 
-    # Start the Telegram bot
-    application.run_webhook(
-        listen="0.0.0.0",
-        port=int(os.environ.get("PORT", 8443)),
-        url_path="webhook",
-        webhook_url=WEBHOOK_URL
-    )
 
 if __name__ == "__main__":
     main()
