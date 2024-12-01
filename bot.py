@@ -1,21 +1,34 @@
 import os
-from flask import Flask
+from flask import Flask, request
 from threading import Thread
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, WebAppInfo
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 import requests
 
-# Bot Token (replace with your actual token)
+# Bot Token
 BOT_TOKEN = os.environ.get('BOT_TOKEN', '7739378344:AAHePCaShSC60pN1VwX9AY4TqD-xZMxQ1gY')
 
-# Flask app for health check
+# Flask app for webhook and health checks
 app = Flask(__name__)
 
-@app.route('/health', methods=['GET'])
-def health_check():
+# Telegram webhook route
+@app.route('/webhook', methods=['POST'])
+def webhook_handler():
+    # Pass the incoming request data to the Telegram bot
+    application.update_queue.put(Update.de_json(request.json, application.bot))
     return "OK", 200
 
-# Start Command Handler
+# Health check route
+@app.route('/health', methods=['GET'])
+def health_check():
+    return "Bot is running!", 200
+
+# Default route (optional)
+@app.route('/', methods=['GET'])
+def home():
+    return "Welcome to the Telegram Bot Service!", 200
+
+# Start command handler
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     intro_text = (
         "👋 Welcome to the VIP Payment Bot!\n\n"
@@ -31,7 +44,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text(intro_text, reply_markup=reply_markup)
 
-# Payment Method Handlers
+# Payment method handler
 async def payment_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
 
@@ -49,21 +62,10 @@ async def payment_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 [InlineKeyboardButton("Go Back", callback_data="go_back")]
             ])
         )
-
     elif query.data == "apple_google_pay":
         keyboard = [
-            [
-                InlineKeyboardButton(
-                    "1 Month (£6.75)",
-                    web_app=WebAppInfo(url="https://buy.stripe.com/8wM0041QI3xK3ficMP"),
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    "Lifetime (£10)",
-                    web_app=WebAppInfo(url="https://buy.stripe.com/aEUeUYaneecoeY03cc"),
-                )
-            ],
+            [InlineKeyboardButton("1 Month (£6.75)", url="https://buy.stripe.com/8wM0041QI3xK3ficMP")],
+            [InlineKeyboardButton("Lifetime (£10)", url="https://buy.stripe.com/aEUeUYaneecoeY03cc")],
             [InlineKeyboardButton("Go Back", callback_data="go_back")],
         ]
         await query.edit_message_text(
@@ -73,7 +75,6 @@ async def payment_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                  "Lifetime: £10",
             reply_markup=InlineKeyboardMarkup(keyboard),
         )
-
     elif query.data == "crypto":
         await query.edit_message_text(
             text="Send crypto to the following address:\n\n"
@@ -88,15 +89,7 @@ async def payment_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             ])
         )
 
-    elif query.data == "i_paid":
-        await query.edit_message_text(
-            text="Thank you! Please send a screenshot of your payment or provide the transaction ID for verification.",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("Go Back", callback_data="go_back")]
-            ])
-        )
-
-# Go Back Handler
+# Go back handler
 async def go_back(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     intro_text = (
         "👋 Welcome to the VIP Payment Bot!\n\n"
@@ -113,35 +106,35 @@ async def go_back(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     await query.edit_message_text(intro_text, reply_markup=reply_markup)
 
-# Main Function
+# Main function
 def main():
-    # Telegram bot setup
+    global application
+    # Initialize Telegram application
     application = Application.builder().token(BOT_TOKEN).build()
 
-    # Add handlers
+    # Add command and callback query handlers
     application.add_handler(CommandHandler("start", start))
-    application.add_handler(CallbackQueryHandler(payment_handler, pattern="^(paypal|apple_google_pay|crypto|i_paid)$"))
+    application.add_handler(CallbackQueryHandler(payment_handler, pattern="^(paypal|apple_google_pay|crypto)$"))
     application.add_handler(CallbackQueryHandler(go_back, pattern="^go_back$"))
 
-    # Set webhook URL
-    WEBHOOK_URL = f"https://<your-app-name>.onrender.com/{BOT_TOKEN}"  # Replace <your-app-name> with your Render app name
+    # Set up the webhook
+    WEBHOOK_URL = f"https://bot-1-f2wh.onrender.com/webhook"  # Replace with your actual Render app name
     response = requests.post(
         f"https://api.telegram.org/bot{BOT_TOKEN}/setWebhook",
         json={"url": WEBHOOK_URL},
     )
     print("Webhook set:", response.status_code, response.text)
 
-    # Flask thread for health checks
-    thread = Thread(target=lambda: app.run(host="0.0.0.0", port=5000))
-    thread.start()
+    # Start Flask in a separate thread
+    flask_thread = Thread(target=lambda: app.run(host="0.0.0.0", port=5000))
+    flask_thread.start()
 
-    # Telegram webhook
-    port = int(os.environ.get("PORT", 8443))
+    # Start the Telegram bot
     application.run_webhook(
         listen="0.0.0.0",
-        port=port,
-        url_path=BOT_TOKEN,
-        webhook_url=WEBHOOK_URL,
+        port=int(os.environ.get("PORT", 8443)),
+        url_path="webhook",
+        webhook_url=WEBHOOK_URL
     )
 
 if __name__ == "__main__":
