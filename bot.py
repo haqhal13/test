@@ -2,40 +2,39 @@ import asyncio
 from flask import Flask, request, jsonify
 from telegram import Update
 from telegram.ext import Application, CommandHandler
-from telegram.ext.webhook import WebhookHandler
 import logging
 
-# Setup logging
+# Logging setup
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO,
 )
 logger = logging.getLogger(__name__)
 
-# Flask app
+# Initialize Flask app
 app = Flask(__name__)
 
-# Telegram bot token and webhook URL
+# Bot Token and Webhook URL
 BOT_TOKEN = "7739378344:AAHePCaShSC60pN1VwX9AY4TqD-xZMxQ1gY"
 WEBHOOK_URL = "https://test-1-ufqj.onrender.com/webhook"
 
-# Initialize the Telegram bot application
+# Initialize Telegram Bot application
 application = Application.builder().token(BOT_TOKEN).build()
 
-# Async-safe function to handle the `/start` command
+# Command Handler for `/start`
 async def start(update: Update, context):
+    """Handle the /start command."""
     await update.message.reply_text("Hello! I'm your bot. How can I assist you?")
 
-# Add handlers
+# Add handlers to the bot
 application.add_handler(CommandHandler("start", start))
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
-    """Webhook endpoint for Telegram."""
+    """Webhook for Telegram bot."""
     try:
-        # Parse the incoming update
         update = Update.de_json(request.get_json(force=True), application.bot)
-        asyncio.run(application.process_update(update))  # Use asyncio.run for async-safe handling
+        asyncio.run(application.process_update(update))  # Process the update with asyncio.run
         return jsonify({"status": "ok"}), 200
     except Exception as e:
         logger.error(f"Error in webhook handler: {e}")
@@ -43,12 +42,10 @@ def webhook():
 
 @app.route("/set_webhook", methods=["GET"])
 def set_webhook():
-    """Endpoint to set the webhook."""
+    """Endpoint to set the webhook for Telegram bot."""
     try:
-        response = application.bot.set_webhook(WEBHOOK_URL)
-        if response:
-            return jsonify({"status": "webhook set"}), 200
-        return jsonify({"status": "failed to set webhook"}), 500
+        application.bot.set_webhook(WEBHOOK_URL)
+        return jsonify({"status": "webhook set"}), 200
     except Exception as e:
         logger.error(f"Error setting webhook: {e}")
         return jsonify({"error": str(e)}), 500
@@ -59,5 +56,5 @@ def health():
     return jsonify({"status": "healthy"}), 200
 
 if __name__ == "__main__":
-    # Run Flask app
+    # Run the Flask app
     app.run(host="0.0.0.0", port=5000)
