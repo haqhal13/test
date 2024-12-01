@@ -1,83 +1,63 @@
-import os
-import logging
+import asyncio
 from flask import Flask, request, jsonify
 from telegram import Update
-from telegram.ext import (
-    Application,
-    CommandHandler,
-    MessageHandler,
-    filters,
-    ContextTypes,
-)
+from telegram.ext import Application, CommandHandler
+from telegram.ext.webhook import WebhookHandler
+import logging
 
-# Configure logging
+# Setup logging
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO,
 )
 logger = logging.getLogger(__name__)
 
-# Constants
+# Flask app
+app = Flask(__name__)
+
+# Telegram bot token and webhook URL
 BOT_TOKEN = "7739378344:AAHePCaShSC60pN1VwX9AY4TqD-xZMxQ1gY"
 WEBHOOK_URL = "https://test-1-ufqj.onrender.com/webhook"
 
-# Initialize Flask app
-app = Flask(__name__)
+# Initialize the Telegram bot application
+application = Application.builder().token(BOT_TOKEN).build()
 
-# Initialize Telegram Application with asynchronous support
-application = (
-    Application.builder().token(BOT_TOKEN).arbitrary_callback_data(True).build()
-)
+# Async-safe function to handle the `/start` command
+async def start(update: Update, context):
+    await update.message.reply_text("Hello! I'm your bot. How can I assist you?")
 
-# Telegram bot command handlers
-async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle the /start command."""
-    await update.message.reply_text("Welcome! Your bot is active and ready.")
+# Add handlers
+application.add_handler(CommandHandler("start", start))
 
-async def echo_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Echo back any message sent by the user."""
-    await update.message.reply_text(update.message.text)
-
-async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
-    """Handle errors."""
-    logger.error(f"Update caused error {context.error}")
-
-# Configure Telegram handlers
-def configure_handlers():
-    application.add_handler(CommandHandler("start", start_command))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, echo_message))
-    application.add_error_handler(error_handler)
-
-# Health check endpoint
-@app.route("/health", methods=["GET"])
-def health_check():
-    return "Bot is healthy and running!", 200
-
-# Webhook endpoint
 @app.route("/webhook", methods=["POST"])
-def webhook_handler():
-    """Handle incoming webhook requests."""
+def webhook():
+    """Webhook endpoint for Telegram."""
     try:
+        # Parse the incoming update
         update = Update.de_json(request.get_json(force=True), application.bot)
-        application.create_task(application.process_update(update))
-        return "OK", 200
+        asyncio.run(application.process_update(update))  # Use asyncio.run for async-safe handling
+        return jsonify({"status": "ok"}), 200
     except Exception as e:
         logger.error(f"Error in webhook handler: {e}")
         return jsonify({"error": str(e)}), 500
 
-# Main entry point
+@app.route("/set_webhook", methods=["GET"])
+def set_webhook():
+    """Endpoint to set the webhook."""
+    try:
+        response = application.bot.set_webhook(WEBHOOK_URL)
+        if response:
+            return jsonify({"status": "webhook set"}), 200
+        return jsonify({"status": "failed to set webhook"}), 500
+    except Exception as e:
+        logger.error(f"Error setting webhook: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/health", methods=["GET"])
+def health():
+    """Health check endpoint."""
+    return jsonify({"status": "healthy"}), 200
+
 if __name__ == "__main__":
-    # Configure Telegram bot handlers
-    configure_handlers()
-
-    # Set up Telegram webhook
-    logger.info("Setting webhook...")
-    application.run_webhook(
-        listen="0.0.0.0",
-        port=int(os.environ.get("PORT", 8443)),
-        url_path="/webhook",
-        webhook_url=WEBHOOK_URL,
-    )
-
-    # Run Flask app for health checks
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), threaded=True)
+    # Run Flask app
+    app.run(host="0.0.0.0", port=5000)
