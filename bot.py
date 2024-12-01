@@ -1,9 +1,18 @@
 import os
+from flask import Flask
+from threading import Thread
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, WebAppInfo
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 
-# Bot Token (environment variable for security)
-TOKEN = os.environ.get('TOKEN')  # Make sure to set this in your Render environment variables
+# Bot Token (Replace with your actual bot token for local testing, but use environment variable for security in Render)
+BOT_TOKEN = os.environ.get('BOT_TOKEN', '7739378344:AAHePCaShSC60pN1VwX9AY4TqD-xZMxQ1gY')
+
+# Flask app for health checks
+app = Flask(__name__)
+
+@app.route('/health', methods=['GET'])
+def health_check():
+    return "OK", 200
 
 # Start Command Handler
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -105,19 +114,25 @@ async def go_back(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 # Main Function
 def main():
-    application = Application.builder().token(TOKEN).build()
+    # Telegram bot setup
+    application = Application.builder().token(BOT_TOKEN).build()
 
     # Add handlers
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CallbackQueryHandler(payment_handler, pattern="^(paypal|apple_google_pay|crypto|i_paid)$"))
     application.add_handler(CallbackQueryHandler(go_back, pattern="^go_back$"))
 
-    # Start the bot using webhook
+    # Flask thread for health checks
+    thread = Thread(target=lambda: app.run(host="0.0.0.0", port=5000))
+    thread.start()
+
+    # Telegram webhook
+    port = int(os.environ.get("PORT", 8443))
     application.run_webhook(
         listen="0.0.0.0",
-        port=int(os.environ.get("PORT", 8443)),
-        url_path=TOKEN,
-        webhook_url=f"https://<your-app-name>.onrender.com/{TOKEN}"  # Replace <your-app-name> with your Render app name
+        port=port,
+        url_path=BOT_TOKEN,
+        webhook_url=f"https://<your-app-name>.onrender.com/{BOT_TOKEN}"
     )
 
 if __name__ == "__main__":
