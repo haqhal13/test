@@ -1,4 +1,5 @@
 import os
+import asyncio
 from flask import Flask, request
 from threading import Thread
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
@@ -22,8 +23,8 @@ def webhook_handler():
         # Log incoming request
         print("Incoming webhook payload:", request.json)
 
-        # Process the Telegram update
-        application.update_queue.put(Update.de_json(request.json, application.bot))
+        # Asynchronously add update to the queue
+        asyncio.run(application.update_queue.put(Update.de_json(request.json, application.bot)))
         return "OK", 200
     except Exception as e:
         # Log the error
